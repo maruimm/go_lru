@@ -1,40 +1,40 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"sync"
+	"time"
 )
 
 func main() {
+	ctx := context.Background()
+	ctx, cancelFunc := context.WithTimeout(ctx, 10 * time.Second)
 
-	sendChannel := make(chan int)
-
-	wg := sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		fmt.Printf("go goroutine start...\n")
-		for item := range sendChannel {
-			fmt.Printf("item:%v\n", item)
+	go func(ctx context.Context) {
+		ELOOP:
+		for {
+			select {
+				case <-ctx.Done(): {
+					fmt.Printf("done reason:%s\n",ctx.Err())
+					break ELOOP
+				}
+			}
 		}
-		fmt.Printf("go goroutine exit...\n")
-	}()
+	}(ctx)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		fmt.Printf("go goroutine2 start...\n")
-		for item := range sendChannel {
-			fmt.Printf("item2:%v\n", item)
+	ctx2, _ := context.WithTimeout(ctx, 20 * time.Second)
+	go func(ctx context.Context) {
+	ELOOP:
+		for {
+			select {
+			case <-ctx.Done(): {
+				fmt.Printf("done reason 2:%s\n",ctx.Err())
+				break ELOOP
+			}
+			}
 		}
-		fmt.Printf("go goroutine2 exit...\n")
-	}()
-
-
-	sendChannel <- 1234
-	close(sendChannel)
-
-	wg.Wait()
-
+	}(ctx2)
+	time.Sleep(5 * time.Second)
+	cancelFunc()
+	time.Sleep(5 * time.Second)
 }
