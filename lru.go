@@ -17,13 +17,19 @@ type Element struct {
 	Ext chan<- interface{}
 }
 
-type InitFunc func(recvGoroutines int) chan<- interface{}
+type ProcessFunc func(item interface{})
+type InitFunc func(recvGoroutines int, itemProcessor ProcessFunc) chan<- interface{}
+
+
+func itemProcessor(item interface{}) {
+	fmt.Printf("process item:%v\n", item)
+}
 
 type myLru struct {
-	pool    map[uint32]Element
-	lruList *list.List
-	maxPool int
-	init    InitFunc
+	pool          map[uint32]Element
+	lruList       *list.List
+	maxPool       int
+	init          InitFunc
 }
 
 func (l *myLru) Close() {
@@ -48,7 +54,7 @@ func (l *myLru) Get(key interface{}) chan<- interface{} {
 
 	element := l.lruList.PushFront(k)
 
-	stExt := l.init(1)
+	stExt := l.init(1,itemProcessor)
 
 	l.pool[k] = Element{
 		El:  element,
@@ -91,13 +97,16 @@ func NewMyLru(maxPool int, myInit InitFunc) Lruer {
 	return l
 }
 
+
+
+
 func initContext(ctx context.Context, wg *sync.WaitGroup) InitFunc {
 
-	return func(recvGoroutinNumber int) chan<- interface{} {
+	return func(recvGoroutineNumber int,itemProcessor ProcessFunc) chan<- interface{} {
 		sendData := make(chan interface{}, 1024)
-		wg.Add(recvGoroutinNumber)
-		fmt.Printf("add times:%d\n", recvGoroutinNumber)
-		for i := 0; i < recvGoroutinNumber; i++ {
+		wg.Add(recvGoroutineNumber)
+		fmt.Printf("add times:%d\n", recvGoroutineNumber)
+		for i := 0; i < recvGoroutineNumber; i++ {
 			go func() {
 				defer func(wg *sync.WaitGroup) {
 					fmt.Printf("defer recv exit \n")
@@ -108,13 +117,13 @@ func initContext(ctx context.Context, wg *sync.WaitGroup) InitFunc {
 					select {
 					case <-ctx.Done():
 						{
-							fmt.Printf("unlimit loop exit\n")
+							fmt.Printf("unlimit loop exit reason:%s\n",ctx.Err())
 							break ELOOP
 						}
 					case item, ok := <-sendData:
 						{
 							if ok {
-								fmt.Printf("recv data:%v\n", item)
+								itemProcessor(item)
 							} else {
 								fmt.Printf("channel closed\n")
 								break ELOOP
