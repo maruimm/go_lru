@@ -9,22 +9,10 @@ import (
 )
 
 func main() {
-/*	c := lru_cache.NewLruCache()
-
-	for i := 0 ; i < 60; i++ {
-		ret, _ :=  c.Get(i)
-		fmt.Printf("%+v\n",ret)
-	}
-
-	for i := 0 ; i < 60; i++ {
-		ret, _ :=  c.Get(i)
-		fmt.Printf("cache:%+v\n",ret)
-	}*/
-
 	ctx, CancelFunc := context.WithCancel(context.Background())
 
 	c := lru_cache.NewCacheSvr(ctx,
-		1024,
+		10,
 		1024 * time.Second,
 		lru_cache.NewStorage(),
 		func(val interface{}) uint32 {
@@ -36,17 +24,19 @@ func main() {
 			return uint32(ret)
 		})
 
-	for i := 0 ; i < 40; i++ {
-		ret, err :=  c.Get(fmt.Sprintf("%d",i))
-		fmt.Printf("key:%d v:%+v, err:%+v\n",i,ret, err)
+	for i := 0 ; i < 1024*10; i++ {
+		go func(i int) {
+			ret, err := c.Get(fmt.Sprintf("%d", i))
+			fmt.Printf("key:%d v:%+v, err:%+v\n", i, ret, err)
+		}(i)
 	}
 
-	for i := 0 ; i < 10; i++ {
+	for i := 0 ; i < 1000; i++ {
 		ret, err :=  c.Get(fmt.Sprintf("%d",i))
 		fmt.Printf("cache2 key:%d v:%+v, err:%+v\n",i,ret, err)
 	}
 
-	for i := 0 ; i < 30; i++ {
+	for i := 0 ; i < 3000; i++ {
 		ret, err :=  c.Get(fmt.Sprintf("%d",i))
 		fmt.Printf("cache3 key:%d v:%+v, err:%+v\n",i,ret, err)
 	}

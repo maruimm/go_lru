@@ -33,12 +33,14 @@ func (svr *CacheSvrItem) start(ctx context.Context) <-chan interface{}{
 						fmt.Printf("taskChan exit..\n")
 						break LOOP
 					}
+
 					val, err := svr.localCache.Get(key)
 					if err != nil {
 						fmt.Printf("svr local cache failed...\n")
 						break
 					}
 					svr.resultChan <- val
+
 				}
 			case started<- struct{}{}:
 
@@ -64,7 +66,7 @@ func (pCache *CacheSvr) Get(key interface{}) (interface{}, error) {
 	index = index % uint32(len(pCache.svr))
 	select {
 	case pCache.svr[index].taskChan <- key:
-	case <-time.After(5 * time.Microsecond): {
+	case <-time.After(10 * time.Second): {
 			return "", errors.New("send key timeout")
 		}
 	}
@@ -77,7 +79,7 @@ func (pCache *CacheSvr) Get(key interface{}) (interface{}, error) {
 			}
 			return val, nil
 		}
-	case <-time.After(5 * time.Microsecond): {
+	case <-time.After(10 * time.Second): {
 			return "", errors.New("get value timeout")
 		}
 	}

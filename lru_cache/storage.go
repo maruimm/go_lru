@@ -1,8 +1,8 @@
 package lru_cache
 
 import (
-	"errors"
 	"math/rand"
+	"time"
 )
 
 type RemoteStorage interface {
@@ -15,15 +15,7 @@ type myStorage struct {
 }
 
 func (s *myStorage) Get(key interface{}) (interface{} ,error) {
-
-	select {
-		case s.channel.taskChan <- key:
-		case result := <- s.channel.resultChan:
-			return result, nil
-		default:
-			return "", errors.New("get storage failed")
-	}
-
+	time.Sleep(1*time.Microsecond)
 	return rand.Int(),nil
 }
 
