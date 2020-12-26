@@ -27,7 +27,6 @@ type LruCache struct {
 	capNumber int
 	storage RemoteStorage
 	cacheExpire time.Duration
-	rchan chan interface{}
 }
 
 
@@ -40,52 +39,35 @@ func (pCache* LruCache)insert(key interface{}, val interface{}) error {
 		data: val,
 		el:el,
 	}
+	fmt.Printf("insert called key:%+v\n", key)
 	return nil
 }
 
-func (pCache *LruCache) refreshCoroutineStart() {
-	go func() {
-		for {
-			select {
-				case key,ok :=<- pCache.rchan: {
-					if !ok {
-						return
-					}
-					val, err := pCache.storage.Get(key)
-					if err != nil {
-						return
-					}
-					_ = pCache.insert(key, val)
-				}
-			}
+
+
+
+func (pCache* LruCache)needRefresh(key interface{}) {
+	go func(key interface{}) {
+		val, err := pCache.storage.Get(key)
+		if err != nil {
+			return
 		}
-	}()
-}
-
-
-func (pCache* LruCache)needRefresh(key interface{}) error {
-	select {
-	case pCache.rchan <- key:
-	case <-time.After(5*time.Microsecond): {
-		return errors.New("needRefresh time out")
-	}
-	}
-	return nil
+		_ = pCache.insert(key, val)
+	}(key)
 }
 
 
 func (pCache* LruCache)update(key interface{}, val entry) error {
 
+	fmt.Printf("diff time:%+v,cacheExpire:%+v\n",
+		time.Now().Sub(val.updateTime) > pCache.cacheExpire,pCache.cacheExpire)
 	if time.Now().Sub(val.updateTime) > pCache.cacheExpire {
-		err := pCache.needRefresh(key)
-		if err != nil {
-			fmt.Printf("error:%+v\n",err)
-			return err
-		}
+		pCache.needRefresh(key)
 	} else { //还未过期之前移动到list头部
 		pCache.lk.Lock()
 		defer pCache.lk.Unlock()
 		pCache.ll.MoveToFront(val.el)
+		fmt.Printf("cache get\n")
 	}
 	return nil
 }
@@ -116,6 +98,7 @@ func (pCache* LruCache)get(key interface{}) (entry ,bool) {
 func (pCache* LruCache)Get(key interface{}) (interface{} ,error) {
 
 	val, ok := pCache.get(key)
+	fmt.Printf("key:%+v, get value ok:%+v\n",key,ok)
 	if !ok  {//没找到
 		originVal, err := pCache.storage.Get(key)
 		if err != nil {
@@ -142,8 +125,6 @@ func NewLruCache(capNumber int,
 		storage: storage,
 		cacheExpire:cacheExpire,
 		lk: new(sync.RWMutex),
-		rchan: make(chan interface{}, 1024),
 	}
-	lru.refreshCoroutineStart()
 	return lru
 }
