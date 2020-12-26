@@ -21,9 +21,9 @@ type entry struct{
 type LruCache struct {
 	ll *list.List //list里面存key的列表,
 	pool map[interface{}]entry
-	cap int
+	capNumber int
 	storage RemoteStorage
-	expire time.Duration
+	cacheExpire time.Duration
 }
 
 
@@ -39,7 +39,7 @@ func (pCache* LruCache)insert(key interface{}, val interface{}) error {
 
 func (pCache* LruCache)update(key interface{}, val entry) error {
 
-	if time.Now().Sub(val.updateTime) > pCache.expire {
+	if time.Now().Sub(val.updateTime) > pCache.cacheExpire {
 		//远端访问,过期了
 		val, err := pCache.storage.Get(key)
 		if err != nil {
@@ -53,8 +53,8 @@ func (pCache* LruCache)update(key interface{}, val entry) error {
 }
 
 func (pCache* LruCache)trim() error{ //超过最大容量时删除最老的
-	if pCache.ll.Len() > pCache.cap {
-		trimCount := pCache.ll.Len() - pCache.cap
+	if pCache.ll.Len() > pCache.capNumber {
+		trimCount := pCache.ll.Len() - pCache.capNumber
 		for i := 0; i < trimCount; i++ {
 			el := pCache.ll.Back()
 			key := el.Value
@@ -87,12 +87,14 @@ func (pCache* LruCache)Get(key interface{}) (interface{} ,error) {
 }
 
 
-func NewLruCache() LocalCache{
+func NewLruCache(capNumber int,
+	cacheExpire time.Duration,
+	storage RemoteStorage) LocalCache{
 	return &LruCache{
 		ll :     list.New(),
 		pool :   make(map[interface{}]entry),
-		cap :    1024,
-		storage: NewStorage(),
-		expire:1024*time.Second,
+		capNumber :    capNumber,
+		storage: storage,
+		cacheExpire:cacheExpire,
 	}
 }
