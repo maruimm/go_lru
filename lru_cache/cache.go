@@ -19,6 +19,7 @@ type entry struct{
 
 
 type LruCache struct {
+	//lk *sync.RWMutex
 	ll *list.List //list里面存key的列表,
 	pool map[interface{}]entry
 	capNumber int
@@ -28,6 +29,8 @@ type LruCache struct {
 
 
 func (pCache* LruCache)insert(key interface{}, val interface{}) error {
+	//pCache.lk.Lock()
+	//defer pCache.lk.Unlock()
 	el := pCache.ll.PushFront(key)
 	pCache.pool[key] = entry{
 		updateTime: time.Now(),
@@ -40,19 +43,23 @@ func (pCache* LruCache)insert(key interface{}, val interface{}) error {
 func (pCache* LruCache)update(key interface{}, val entry) error {
 
 	if time.Now().Sub(val.updateTime) > pCache.cacheExpire {
-		//远端访问,过期了
+		//过期了,远端访问
 		val, err := pCache.storage.Get(key)
 		if err != nil {
 			return err
 		}
 		return pCache.insert(key, val)
 	} else { //还未过期之前移动到list头部
+		//pCache.lk.Lock()
+		//defer pCache.lk.Unlock()
 		pCache.ll.MoveToFront(val.el)
 	}
 	return nil
 }
 
 func (pCache* LruCache)trim() error{ //超过最大容量时删除最老的
+	//pCache.lk.Lock()
+	//defer pCache.lk.Unlock()
 	if pCache.ll.Len() > pCache.capNumber {
 		trimCount := pCache.ll.Len() - pCache.capNumber
 		for i := 0; i < trimCount; i++ {
@@ -65,9 +72,17 @@ func (pCache* LruCache)trim() error{ //超过最大容量时删除最老的
 	return nil
 }
 
-func (pCache* LruCache)get(key interface{}) (interface{} ,error) {
+func (pCache* LruCache)get(key interface{}) (entry ,bool) {
 
+	//pCache.lk.RLock()
+	//defer pCache.lk.RUnlock()
 	val,ok := pCache.pool[key]
+	return val, ok
+}
+
+func (pCache* LruCache)Get(key interface{}) (interface{} ,error) {
+
+	val, ok := pCache.get(key)
 	if !ok  {//没找到
 		originVal, err := pCache.storage.Get(key)
 		if err != nil {
@@ -80,10 +95,7 @@ func (pCache* LruCache)get(key interface{}) (interface{} ,error) {
 		_ = pCache.update(key , val)
 	}
 	return val.data, nil //找到了
-}
 
-func (pCache* LruCache)Get(key interface{}) (interface{} ,error) {
-	return pCache.get(key)
 }
 
 
@@ -96,5 +108,6 @@ func NewLruCache(capNumber int,
 		capNumber :    capNumber,
 		storage: storage,
 		cacheExpire:cacheExpire,
+		//lk: new(sync.RWMutex),
 	}
 }

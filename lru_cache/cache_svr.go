@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strconv"
 	"time"
 )
 
@@ -17,9 +16,11 @@ type CacheSvrItem struct {
 	localCache LocalCache
 }
 
-func (svr *CacheSvrItem) start(ctx context.Context) {
+func (svr *CacheSvrItem) start(ctx context.Context) <-chan interface{}{
+	started := make(chan interface{})
 	go func() {
 		defer close(svr.resultChan)
+		defer close(started)
 	LOOP:
 		for {
 			select {
@@ -39,9 +40,13 @@ func (svr *CacheSvrItem) start(ctx context.Context) {
 					}
 					svr.resultChan <- val
 				}
+			case started<- struct{}{}:
+
 			}
+
 		}
 	}()
+	return started
 }
 
 type Channels struct {
@@ -60,7 +65,7 @@ func (pCache *CacheSvr) Get(key interface{}) (interface{}, error) {
 	select {
 	case pCache.svr[index].taskChan <- key:
 	case <-time.After(5 * time.Microsecond): {
-			return "", errors.New("get cache value timeout")
+			return "", errors.New("send key timeout")
 		}
 	}
 	select {
@@ -73,7 +78,7 @@ func (pCache *CacheSvr) Get(key interface{}) (interface{}, error) {
 			return val, nil
 		}
 	case <-time.After(5 * time.Microsecond): {
-			return "", errors.New("get cache value timeout")
+			return "", errors.New("get value timeout")
 		}
 	}
 }
@@ -81,7 +86,8 @@ func (pCache *CacheSvr) Get(key interface{}) (interface{}, error) {
 func NewCacheSvr(ctx context.Context,
 	capNumber int,
 	cacheExpire time.Duration,
-	storage RemoteStorage) LocalCache {
+	storage RemoteStorage,
+	keyToUintFunc KeyToUint) LocalCache {
 	var chains []Channels
 	numCPU := runtime.NumCPU()
 	if numCPU == 0 {
@@ -99,7 +105,8 @@ func NewCacheSvr(ctx context.Context,
 			taskChan:   taskChan,
 			resultChan: resultChan,
 		}
-		svr.start(ctx)
+		started := svr.start(ctx)
+		<-started
 		chains = append(chains, Channels{
 			taskChan:   taskChan,
 			resultChan: resultChan,
@@ -107,13 +114,6 @@ func NewCacheSvr(ctx context.Context,
 	}
 	return &CacheSvr{
 		svr: chains,
-		keyToUintFunc: func(val interface{}) uint32 {
-			str := val.(string)
-			ret, err := strconv.Atoi(str)
-			if err != nil {
-				return 0
-			}
-			return uint32(ret)
-		},
+		keyToUintFunc: keyToUintFunc,
 	}
 }

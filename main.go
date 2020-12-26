@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/maruimm/go_lru/lru_cache"
+	"strconv"
 	"time"
 )
 
@@ -25,7 +26,15 @@ func main() {
 	c := lru_cache.NewCacheSvr(ctx,
 		1024,
 		1024 * time.Second,
-		lru_cache.NewStorage())
+		lru_cache.NewStorage(),
+		func(val interface{}) uint32 {
+			str := val.(string)
+			ret, err := strconv.Atoi(str)
+			if err != nil {
+				return 0
+			}
+			return uint32(ret)
+		})
 
 	for i := 0 ; i < 40; i++ {
 		ret, err :=  c.Get(fmt.Sprintf("%d",i))
