@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/maruimm/go_lru/lru_cache"
+	"sync"
 	"time"
 )
 
@@ -12,35 +13,35 @@ func main() {
 
 	c := lru_cache.NewCacheSvr(ctx,
 		10,
-		1 * time.Second,
+		1024 * time.Second,
 		lru_cache.NewStorage(),
 		)
 
-	for i := 0 ; i < 1024; i++ {
+	var wg sync.WaitGroup
+	wg.Add(20)
+	for i := 0 ; i < 20; i++ {
 		go func() {
-			for {
-				for i := 0; i < 1024; i++ {
-					ret, err := c.Get(fmt.Sprintf("%d", i))
-					fmt.Printf("key:%d v:%+v, err:%+v\n", i, ret, err)
-					time.Sleep(1*time.Second)
-				}
+			defer wg.Done()
+			for i := 0; i < 20; i++ {
+				ret, err := c.Get(fmt.Sprintf("%d", i))
+				fmt.Printf("key:%d v:%+v, err:%+v\n", i, ret, err)
+				//time.Sleep(1*time.Second)
 			}
 		}()
 	}
+	wg.Wait()
 
-	fmt.Printf("cache.....\n")
+	go func() {
+		for i := 10; i < 20; i++ {
+			ret, err := c.Get(fmt.Sprintf("%d", i))
+			fmt.Printf("cache key:%d v:%+v, err:%+v\n", i, ret, err)
+			//time.Sleep(1*time.Second)
+		}
+	}()
 
-	for i := 0 ; i < 1000; i++ {
-		ret, err :=  c.Get(fmt.Sprintf("%d",i))
-		fmt.Printf("cache2 key:%d v:%+v, err:%+v\n",i,ret, err)
-	}
-
-	for i := 0 ; i < 3000; i++ {
-		ret, err :=  c.Get(fmt.Sprintf("%d",i))
-		fmt.Printf("cache3 key:%d v:%+v, err:%+v\n",i,ret, err)
+	for {
+		time.Sleep(10 * time.Second)
 	}
 	CancelFunc()
-
-	time.Sleep(10*time.Second)
 
 }

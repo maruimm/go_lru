@@ -48,11 +48,13 @@ func (pCache* LruCache)insert(key interface{}, val interface{}) error {
 
 func (pCache* LruCache)needRefresh(key interface{}) {
 	go func(key interface{}) {
-		val, err := pCache.storage.Get(key)
+		val, flag,err := pCache.storage.Get(key)
 		if err != nil {
 			return
 		}
-		_ = pCache.insert(key, val)
+		if flag == NeedUpdateCache {
+			_ = pCache.insert(key, val)
+		}
 	}(key)
 }
 
@@ -98,14 +100,15 @@ func (pCache* LruCache)get(key interface{}) (entry ,bool) {
 func (pCache* LruCache)Get(key interface{}) (interface{} ,error) {
 
 	val, ok := pCache.get(key)
-	fmt.Printf("key:%+v, get value ok:%+v\n",key,ok)
 	if !ok  {//没找到
-		originVal, err := pCache.storage.Get(key)
+		originVal, flag, err := pCache.storage.Get(key)
 		if err != nil {
 			return "" , errors.New("no data")
 		}
-		_ = pCache.insert(key, originVal)
-		_ = pCache.trim()
+		if flag == NeedUpdateCache{
+			_ = pCache.insert(key, originVal)
+			_ = pCache.trim()
+		}
 		return originVal,nil
 	} else {
 		_ = pCache.update(key , val)
